@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+:root {
+  /* Gogeta (Super Saiyan Blue) palette — a near-black ground with a cold
+     navy cast, lit by the cyan/blue aura accents below. */
+  --background: #04070e;
+  --foreground: #e9eef2;
+
+  /* Brand ramp: the aura runs bright cyan -> deep electric blue. */
+  --brand-aura: #67e8f9;
+  --brand-cyan: #22d3ee;
+  --brand-blue: #2563eb;
+  --brand-deep: #1e40af;
+  /* Shoulder-armor gold, kept as the single warm counterpoint. */
+  --brand-gold: #fbbf24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  position: relative;
+}
+
+/* Ambient gamified glows behind everything (fixed, non-interactive). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(55rem 38rem at -5% -10%, rgba(103, 232, 249, 0.16), transparent 55%),
+    radial-gradient(55rem 40rem at 105% 10%, rgba(37, 99, 235, 0.20), transparent 55%),
+    radial-gradient(45rem 35rem at 60% 110%, rgba(34, 211, 238, 0.10), transparent 60%);
+}
+
+/* Card / glass surfaces. */
+.glass {
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Solid card — a cool slate panel so it reads as part of the blue theme
+   rather than a neutral grey box sitting on top of it. */
+.panel {
+  background: rgba(14, 20, 33, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2f3a transparent;
+}
+
+/* Scrollbar only becomes visible while actively scrolling (thumb color
+   toggles, track width stays constant so nothing shifts layout) — applied
+   via a `.is-scrolling` class toggled from a scroll listener, since there's
+   no CSS-only way to detect "currently scrolling". */
+.scrollbar-on-scroll {
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-on-scroll.is-scrolling {
+  scrollbar-color: #2a2f3a transparent;
+}
+.scrollbar-on-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.scrollbar-on-scroll.is-scrolling::-webkit-scrollbar-thumb {
+  background: #2a2f3a;
+}
+
+/* Native <select> renders shorter than a sibling <input>/<textarea> using
+   the same Tailwind padding — the browser's built-in dropdown-arrow chrome
+   eats into the box instead of sitting inside it. appearance:none + a
+   hand-drawn chevron makes the box model fully CSS-controlled so it matches
+   text inputs exactly. */
+.select-field {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23a1a1aa'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 0 1 1.06.02L10 10.94l3.71-3.71a.75.75 0 1 1 1.06 1.06l-4.24 4.25a.75.75 0 0 1-1.06 0L5.21 8.29a.75.75 0 0 1 .02-1.08Z' clip-rule='evenodd'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  background-size: 1rem;
+  padding-right: 2.25rem;
+  color-scheme: dark;
+}
+
+/* Only the closed box can be fully custom-styled — the open native listbox
+ * (its background/text/highlight) is browser-drawn and CSS-limited, but
+ * `color-scheme: dark` above plus these two properties (both actually
+ * supported on <option>, unlike most other box styling) are enough to stop
+ * it rendering as a plain white OS popup against this dark theme. */
+.select-field option {
+  background-color: #14171a;
+  color: var(--foreground);
+}

@@ -1,0 +1,774 @@
+// Predora — Prediction & Rewards Platform
+// Prisma schema. Drives the app AND the (later) admin panel.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Enums ───────────────────────────────
+
+enum Role {
+  USER
+  VIEWER
+  ADMIN
+}
+
+enum UserLevel {
+  BEGINNER
+  PREDICTOR
+  ANALYST
+  EXPERT
+  CHAMPION
+  LEGEND
+}
+
+enum OtpPurpose {
+  VERIFY_EMAIL
+  RESET_PASSWORD
+}
+
+enum PredictionStatus {
+  DRAFT
+  SCHEDULED
+  OPEN
+  LOCKED
+  AUTO_RESOLVED // Polymarket confirmed a winner; awaiting an admin's payout confirmation
+  RESOLVED
+  CANCELLED
+}
+
+enum EntryStatus {
+  LOCKED
+  WON
+  LOST
+}
+
+enum CoinTxnType {
+  SIGNUP_BONUS
+  ENTRY_FEE
+  CORRECT_REWARD
+  LUCKY_BONUS
+  ADMIN_ADJUST
+  BONUS
+  QUIZ_ENTRY
+  QUIZ_REWARD
+  /// Points bought with USDC (SPL) on Solana, credited only after the backend
+  /// has verified the on-chain payment (see PointPurchase).
+  POINT_PURCHASE
+  /// Points cashed out for stablecoin. Written once, at COMPLETED — a pending
+  /// withdrawal reserves points without touching the ledger, so a rejected
+  /// request leaves no accounting trace to unwind (see WithdrawalRequest).
+  WITHDRAWAL
+}
+
+enum BadgeKey {
+  WELCOME
+  FIRST_PREDICTION
+  ACCURACY_MASTER
+  WINNING_STREAK
+  DAILY_HERO
+  WEEKLY_STAR
+  MONTHLY_CHAMPION
+}
+
+enum NotificationType {
+  LUCKY
+  RESULT
+  BADGE
+  LEADERBOARD
+  SYSTEM
+  REMINDER
+}
+
+enum LeaderboardPeriod {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+/// Fixed category set for the quiz game. Deliberately separate from the
+/// prediction `Category` table: that one is admin-managed with icon/accent/
+/// sortOrder and drives the prediction feed's own counts and nav, so mixing
+/// quiz categories into it would pollute the predictions UI.
+enum QuizCategory {
+  POLITICS
+  SPORTS
+  ENTERTAINMENT
+  GENERAL_KNOWLEDGE
+}
+
+/// Persisted lifecycle of one quiz session. Timing itself is DERIVED from the
+/// slot clock (see QuizService.slotFor) rather than driven by a ticking job —
+/// this column is the durable record of where a session ended up.
+enum QuizStatus {
+  SCHEDULED // join window open, not started yet
+  RUNNING // questions are live
+  FINISHED // questions over, awaiting/after settlement
+  CANCELLED // admin killed this session
+}
+
+enum QuizResult {
+  WON
+  LOST
+}
+
+// ─────────────────────────────── Users ───────────────────────────────
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  username           String    @unique
+  name               String
+  passwordHash       String
+  role               Role      @default(USER)
+  coins              Int       @default(0)
+  level              UserLevel @default(BEGINNER)
+  xp                 Int       @default(0)
+  totalPredictions   Int       @default(0)
+  correctPredictions Int       @default(0)
+  currentStreak      Int       @default(0)
+  bestStreak         Int       @default(0)
+  monthlyTop3Count   Int       @default(0)
+  avatarSeed         Int       @default(0)
+  bio                String?
+  isVerified         Boolean   @default(false)
+  isSuspended        Boolean   @default(false)
+  notifyPush         Boolean   @default(true)
+  notifyLucky        Boolean   @default(true)
+  notifyResults      Boolean   @default(true)
+  notifyLeaderboard  Boolean   @default(false)
+  lastActiveAt       DateTime?
+  lastDailyBonusAt   DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  entries        UserPrediction[]
+  transactions   CoinTransaction[]
+  badges         UserBadge[]
+  notifications  Notification[]
+  otps           Otp[]
+  luckyWins      LuckyWinner[]
+  deviceTokens   DeviceToken[]
+  quizEntries    QuizParticipation[]
+  pointPurchases PointPurchase[]
+  withdrawals    WithdrawalRequest[]
+
+  @@index([role])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String // 'android' | 'ios'
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Otp {
+  id         String     @id @default(cuid())
+  userId     String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code       String
+  purpose    OtpPurpose
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([userId, purpose])
+}
+
+// ─────────────────────── Predictions / Engine ────────────────────────
+
+model Category {
+  id           String   @id @default(cuid())
+  key          String   @unique
+  label        String
+  icon         String
+  imageUrl     String?
+  iconImageUrl String?
+  accent       String   @default("predictions")
+  sortOrder    Int      @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  predictions Prediction[]
+}
+
+model Prediction {
+  id                   String           @id @default(cuid())
+  // Human-readable, source-tagged reference code (e.g. PREDICT-POLYMARKET-<marketId>,
+  // PREDICT-CSV-<shortId>, PREDICT-MANUAL-<shortId>) — lets an admin cross-check a
+  // Polymarket-imported row against the real Polymarket market id at a glance.
+  // Nullable because existing rows predate this column; new rows always get one.
+  referenceCode        String?          @unique
+  categoryId           String
+  category             Category         @relation(fields: [categoryId], references: [id])
+  title                String
+  subtitle             String           @default("")
+  info                 String           @default("")
+  bannerImageUrl       String?
+  entryFee             Int              @default(50)
+  reward               Int              @default(100)
+  // When true, entryFee/reward above are just a cached snapshot — the
+  // effective value always resolves live from Settings -> Points economy
+  // (economy.entryFee / economy.correctReward) instead, so admin-wide
+  // changes propagate to every "use default" prediction without a backfill.
+  // false means entryFee/reward are a deliberate per-prediction override.
+  useDefaultEconomy    Boolean          @default(false)
+  status               PredictionStatus @default(DRAFT)
+  featured             Boolean          @default(false)
+  source               String           @default("MANUAL") // MANUAL | CSV | AUTO_ENTRY
+  rawData              String?          @db.Text // full source payload, set when source = AUTO_ENTRY
+  // Polymarket's own 24h trading volume (USD), captured once at import time —
+  // only ever set for source=AUTO_ENTRY. The real-world "how hot is this
+  // market" signal, since our own `participants` count is usually ~0 for
+  // freshly-imported Polymarket predictions our users haven't found yet.
+  // Not refreshed after import (would need a periodic re-fetch job).
+  polymarketVolume24hr Float?
+  // Unified sort key for sort=trending: the polymarketVolume24hr snapshot
+  // above for Polymarket imports (set once at creation, frozen thereafter),
+  // kept live in lockstep with `participants` for CSV/Manual predictions
+  // (incremented alongside participants on every submit) since there's no
+  // external market to borrow a signal from for those.
+  trendingScore        Float            @default(0)
+  participants         Int              @default(0)
+  opensAt              DateTime         @default(now())
+  closesAt             DateTime
+  resolvedAt           DateTime?
+  correctOptionId      String?          @unique
+  createdById          String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+
+  options       PredictionOption[] @relation("PredictionOptions")
+  entries       UserPrediction[]
+  correctOption PredictionOption?  @relation("CorrectOption", fields: [correctOptionId], references: [id])
+
+  @@index([status, closesAt])
+  @@index([status, trendingScore])
+  @@index([categoryId])
+  @@index([featured])
+}
+
+model PredictionOption {
+  id                 String     @id @default(cuid())
+  predictionId       String
+  prediction         Prediction @relation("PredictionOptions", fields: [predictionId], references: [id], onDelete: Cascade)
+  label              String
+  odds               Float      @default(1.9)
+  order              Int        @default(0)
+  votes              Int        @default(0)
+  marketKey          String? // Polymarket market slug, set when the parent prediction's source = AUTO_ENTRY
+  polymarketMarketId String? // Polymarket's own numeric market id — lets the resolution check look the market up directly by id (GET /markets/:id), which isn't subject to the closed/active filtering the slug-based list endpoint applies
+  question           String? // full Polymarket market question text (label is often a short groupItemTitle like "<5")
+
+  entries    UserPrediction[]
+  correctFor Prediction?      @relation("CorrectOption")
+
+  @@index([predictionId])
+}
+
+model UserPrediction {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  predictionId String
+  prediction   Prediction       @relation(fields: [predictionId], references: [id], onDelete: Cascade)
+  optionId     String
+  option       PredictionOption @relation(fields: [optionId], references: [id])
+  entryFee     Int
+  status       EntryStatus      @default(LOCKED)
+  rewardEarned Int              @default(0)
+  createdAt    DateTime         @default(now())
+  resolvedAt   DateTime?
+
+  @@unique([userId, predictionId])
+  @@index([predictionId, status])
+  @@index([userId])
+}
+
+// ──────────────────────── Coins / Rewards ────────────────────────────
+
+model CoinTransaction {
+  id           String      @id @default(cuid())
+  userId       String
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         CoinTxnType
+  amount       Int
+  balanceAfter Int
+  referenceId  String?
+  description  String      @default("")
+  createdAt    DateTime    @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type])
+}
+
+/// One row per calendar day (SOW §5.3 "Daily Reward Pool") — `dayKey` (e.g.
+/// "2026-07-29") is the idempotency key so the nightly job can never draw
+/// twice for the same day. Nullable only to accommodate rows created before
+/// this model moved from per-prediction to per-day (Postgres allows multiple
+/// NULLs under a plain unique constraint); every row created going forward
+/// always has one.
+model LuckyDraw {
+  id             String   @id @default(cuid())
+  dayKey         String?  @unique
+  drawDate       DateTime @default(now())
+  winnersCount   Int      @default(10)
+  bonusPerWinner Int      @default(500)
+  seed           String
+  eligibleCount  Int      @default(0)
+  createdAt      DateTime @default(now())
+
+  winners LuckyWinner[]
+}
+
+model LuckyWinner {
+  id        String    @id @default(cuid())
+  drawId    String
+  draw      LuckyDraw @relation(fields: [drawId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  createdAt DateTime  @default(now())
+
+  @@unique([drawId, userId])
+}
+
+// ──────────────────────── Badges / Levels ────────────────────────────
+
+model Badge {
+  id          String   @id @default(cuid())
+  key         BadgeKey @unique
+  label       String
+  requirement String
+  icon        String
+  accent      String   @default("predictions")
+  active      Boolean  @default(true)
+
+  users UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(cuid())
+  userId   String
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  badgeId  String
+  badge    Badge    @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, badgeId])
+}
+
+model LevelDef {
+  id       String    @id @default(cuid())
+  key      UserLevel @unique
+  label    String
+  criteria String
+  order    Int
+  minXp    Int       @default(0)
+}
+
+// ──────────────────────── Leaderboard ────────────────────────────────
+
+model LeaderboardSnapshot {
+  id        String            @id @default(cuid())
+  period    LeaderboardPeriod
+  periodKey String
+  rankings  Json
+  createdAt DateTime          @default(now())
+
+  @@unique([period, periodKey])
+}
+
+// ──────────────────────── Notifications ──────────────────────────────
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  @@index([userId, read])
+}
+
+// ──────────── Admin: settings / banners / CMS / audit ────────────────
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+model Banner {
+  id        String   @id @default(cuid())
+  title     String
+  imageUrl  String
+  link      String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model CmsPage {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  content   String
+  active    Boolean  @default(true)
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  target    String?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+}
+
+model PolymarketImportLog {
+  id        String   @id @default(cuid())
+  url       String
+  trigger   String // MANUAL | CRON
+  status    String // SUCCESS | FAILED
+  created   Int      @default(0)
+  skipped   Int      @default(0)
+  error     String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/**
+ * One row per auto-resolution cron run — how many LOCKED Polymarket
+ * predictions were checked, how many got flipped to AUTO_RESOLVED, and why
+ * any were skipped (still open on Polymarket, ambiguous outcome, etc).
+ */
+model PolymarketResolutionLog {
+  id        String   @id @default(cuid())
+  checked   Int      @default(0)
+  resolved  Int      @default(0)
+  skipped   Int      @default(0)
+  error     String?
+  details   Json?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+/**
+ * Per-prediction resolution-check audit trail — distinct from
+ * PolymarketResolutionLog (which is one row per *cron run*, aggregate
+ * counts only). This is one row per *prediction*, so "why hasn't X
+ * resolved yet" or "when did Y auto-resolve" can be answered directly.
+ * Every MANUAL (admin-triggered, on-demand) check is logged regardless of
+ * outcome — low volume by nature. CRON checks are only logged when they
+ * actually flip a prediction to AUTO_RESOLVED, since re-logging the same
+ * "still open" / "not found" outcome for the same stale prediction every
+ * 30 minutes forever would grow this table unbounded for no benefit; that
+ * routine noise stays in PolymarketResolutionLog.details instead.
+ */
+model PolymarketResolutionCheck {
+  id               String   @id @default(cuid())
+  predictionId     String
+  marketKey        String?
+  trigger          String // MANUAL | CRON
+  outcome          String // RESOLVED | STILL_OPEN | AMBIGUOUS | NOT_FOUND | NO_MARKET_KEY
+  detectedOptionId String?
+  detail           String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  @@index([predictionId, createdAt])
+}
+
+// ──────────────────────────── Quiz ───────────────────────────────────
+
+/// One trivia question. Exactly four options is a hard business rule, so the
+/// options are four columns rather than a related table (unlike
+/// PredictionOption, where the count genuinely varies) — the shape enforces
+/// the rule instead of relying on validation alone.
+model QuizQuestion {
+  id           String       @id @default(cuid())
+  category     QuizCategory
+  question     String
+  optionA      String
+  optionB      String
+  optionC      String
+  optionD      String
+  /// 0-based index into [optionA, optionB, optionC, optionD].
+  correctIndex Int
+  explanation  String       @default("")
+  active       Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  answers QuizAnswer[]
+
+  /// Stops the same question being seeded or hand-added twice in a category —
+  /// also what makes the seeder safely re-runnable.
+  @@unique([category, question])
+  @@index([category, active])
+}
+
+/// One quiz session: a (category, slot) pair on the global 15-minute clock.
+///
+/// `slotIndex` is floor(epochMs / cycleMs), so sessions are addressable by
+/// pure arithmetic and never need a scheduler to exist. The unique constraint
+/// on (category, slotIndex) is what makes creation idempotent — two concurrent
+/// requests, or two backend instances, cannot produce duplicate sessions. Same
+/// approach as LuckyDraw.dayKey.
+model Quiz {
+  id        String       @id @default(cuid())
+  category  QuizCategory
+  slotIndex Int
+  status    QuizStatus   @default(SCHEDULED)
+  startsAt  DateTime
+  endsAt    DateTime
+  /// Set exactly once, by whichever path settles this session first (the
+  /// result call or the sweep cron) — the idempotency guard for payouts.
+  settledAt DateTime?
+
+  // ── Config snapshot ──
+  // Frozen at creation so an admin changing the rules mid-flight cannot alter
+  // a session already in progress (or already played).
+  cycleSeconds       Int
+  secondsPerQuestion Int
+  questionsPerQuiz   Int
+  entryPoints        Int
+  rewardPoints       Int
+  winPercent         Int
+
+  /// Ordered question ids for this session — also a snapshot, so activating or
+  /// deleting a question mid-session can't change what was actually asked.
+  questionIds String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participations QuizParticipation[]
+
+  @@unique([category, slotIndex])
+  @@index([status, endsAt])
+  @@index([startsAt])
+}
+
+/// A user's entry into one quiz. The unique (userId, quizId) constraint is the
+/// real defence against a double-clicked Join — not a check-then-write race.
+model QuizParticipation {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  quizId String
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  /// What was actually charged (0 for a free entry — see economy.pointsEnabled
+  /// and the store-review account).
+  entryPoints Int
+
+  correctCount    Int         @default(0)
+  wrongCount      Int         @default(0)
+  unansweredCount Int         @default(0)
+  score           Int         @default(0)
+  percentage      Float       @default(0)
+  rewardPoints    Int         @default(0)
+  result          QuizResult?
+
+  joinedAt    DateTime  @default(now())
+  /// Set when this entry has been graded and any reward paid. Non-null means
+  /// "already settled" — the per-user half of the double-reward guard.
+  completedAt DateTime?
+
+  answers QuizAnswer[]
+
+  @@unique([userId, quizId])
+  @@index([userId, joinedAt])
+  @@index([quizId])
+}
+
+/// One submitted answer. Unique (participationId, questionId) makes a replayed
+/// answer request a no-op instead of an overwrite.
+model QuizAnswer {
+  id              String            @id @default(cuid())
+  participationId String
+  participation   QuizParticipation @relation(fields: [participationId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        QuizQuestion      @relation(fields: [questionId], references: [id])
+
+  selectedIndex Int
+  /// Graded server-side at submit time; never returned to the client before
+  /// the result phase.
+  isCorrect     Boolean
+  /// 0-based position of this question within the session.
+  questionIndex Int
+  /// Milliseconds from the question opening to the answer landing.
+  responseMs    Int
+  answeredAt    DateTime @default(now())
+
+  @@unique([participationId, questionId])
+  @@index([participationId])
+}
+
+/// Lifecycle of a points purchase. A purchase only ever leaves PENDING once the
+/// backend has checked the transaction against the chain itself.
+enum PointPurchaseStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+/// One attempt to buy points with USDC.
+///
+/// Created as PENDING *before* the user's wallet signs anything, so the amount
+/// and rate the backend will honour are fixed server-side up front — the client
+/// never gets to state how many points it is owed. `points`, `amountUsdc` and
+/// `exchangeRate` here are the quote; verification re-derives the real amount
+/// from the chain and only credits what was actually paid.
+model PointPurchase {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The wallet expected to send the payment, lower-cased. The Transfer event's
+  /// `from` must match this, so one user cannot settle another's intent.
+  walletAddress String
+
+  /// Smallest-unit USDC (6 decimals on the SPL mint). Stored as a
+  /// string because JS numbers cannot hold token units exactly, and Prisma
+  /// BigInt would serialise awkwardly through JSON.
+  amountUsdcRaw String
+  /// Human-readable copy of the same amount, for display and admin CSV only.
+  amountUsdc    Decimal @db.Decimal(38, 6)
+
+  /// Points quoted at intent time; overwritten with the verified figure on
+  /// confirmation if the chain says a different amount was paid.
+  points       Int
+  /// Points per whole USDC, snapshotted so a later admin rate change cannot
+  /// alter a purchase that has already been quoted.
+  exchangeRate Int
+
+  network         String
+  tokenMint       String
+  receiverAddress String
+
+  /// Unique so the same on-chain payment can never be credited twice — the
+  /// database, not application logic, is what enforces that.
+  transactionSignature String?             @unique
+  status          PointPurchaseStatus @default(PENDING)
+  /// Why a purchase failed, shown back to the user.
+  failureReason   String?
+
+  /// Block the payment was mined in, kept for auditing/support.
+  blockNumber BigInt?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  /// Set exactly once, in the same transaction that credits the points — the
+  /// idempotency guard against double crediting.
+  completedAt DateTime?
+  /// Intents go stale: an unconfirmed one past this is EXPIRED by the sweeper.
+  expiresAt   DateTime
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([walletAddress])
+}
+
+/// Lifecycle of a cash-out. Admin review sits between PENDING and any transfer,
+/// so funds never move without a human decision.
+///
+///   PENDING → APPROVED → PROCESSING → COMPLETED
+///        ↘ REJECTED          ↘ FAILED (retryable)
+///        ↘ CANCELLED (by the user, while still PENDING)
+enum WithdrawalStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  FAILED
+  CANCELLED
+}
+
+/// A request to convert points back into stablecoin.
+///
+/// Points are *reserved* rather than debited while a request is open: the ledger
+/// gets a single WITHDRAWAL row at COMPLETED, so a rejected or failed request
+/// needs no compensating entry and the balance never dips for money that was
+/// never sent. `reservedPoints` is what makes a pending request unavailable to a
+/// second one — see WithdrawalService.availability().
+model WithdrawalRequest {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// Destination wallet, lower-cased. Confirmed by the user in the dialog and
+  /// shown again to the admin — a payout must never go somewhere silently.
+  walletAddress String
+
+  /// Points requested, and the payout derived from them server-side.
+  points       Int
+  /// Smallest-unit token amount (6 decimals for USDC), as a string because JS
+  /// numbers cannot hold token units exactly.
+  amountRaw    String
+  /// Human-readable payout, for display and admin CSV only.
+  amount       Decimal @db.Decimal(38, 6)
+  /// Points per whole token, snapshotted at request time so a later admin rate
+  /// change cannot restate what an open request is worth.
+  exchangeRate Int
+
+  network       String
+  tokenMint     String
+  tokenSymbol   String
+  tokenDecimals Int
+
+  status   WithdrawalStatus @default(PENDING)
+  /// True while the request holds points; cleared on the terminal states. Kept
+  /// as a column rather than derived from `status` so the availability query can
+  /// index on it directly.
+  reserved Boolean          @default(true)
+
+  /// Optional note from the user at request time.
+  userNote  String?
+  /// Set by the admin on reject/fail — surfaced to the user verbatim.
+  adminNote String?
+  /// Which admin acted on it.
+  adminId   String?
+
+  /// The payout transaction, unique so the same transfer can never settle two
+  /// requests.
+  transactionSignature String?             @unique
+  blockNumber     BigInt?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  /// Set exactly once, in the same transaction that debits the points — the
+  /// idempotency guard against double-debiting.
+  completedAt DateTime?
+
+  @@index([userId, createdAt])
+  @@index([status])
+  @@index([walletAddress])
+  @@index([userId, reserved])
+}

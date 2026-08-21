@@ -1,0 +1,54 @@
+{
+  "name": "gogeta-web-portal",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "GOGETA — Prediction & Rewards web portal (React + Vite port of the Flutter Web portal).",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --noEmit",
+    "test:smoke": "node tests/smoke.mjs",
+    "test:content": "node tests/func.mjs",
+    "test:flows": "node tests/func2.mjs",
+    "test:layout": "node tests/func3.mjs",
+    "test:auth": "node tests/func4.mjs",
+    "test:quiz": "node tests/func5.mjs",
+    "test:points": "node tests/func6.mjs"
+  },
+  "dependencies": {
+    "@emotion/react": "^11.13.3",
+    "@emotion/styled": "^11.13.0",
+    "@mui/icons-material": "^6.1.6",
+    "@mui/material": "^6.1.6",
+    "@solana/spl-token": "^0.4.15",
+    "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-react": "^0.15.39",
+    "@solana/wallet-adapter-react-ui": "^0.9.39",
+    "@solana/wallet-adapter-wallets": "^0.19.38",
+    "@solana/web3.js": "^1.98.4",
+    "@tanstack/react-query": "^5.101.4",
+    "axios": "^1.7.7",
+    "buffer": "^6.0.3",
+    "dompurify": "^3.2.3",
+    "firebase": "^11.1.0",
+    "framer-motion": "^11.15.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.6.3",
+    "vite": "^6.0.3"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e",
+  "overrides": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1"
+  }
+}

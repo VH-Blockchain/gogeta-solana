@@ -1,0 +1,11 @@
+/* Flutter: AnimationController(900ms, lowerBound 0.35, upperBound 0.9, repeat reverse) */
+.skeleton {
+  background: var(--surface-hover);
+  animation: skeleton-pulse 900ms ease-in-out infinite alternate;
+  flex-shrink: 0;
+}
+
+@keyframes skeleton-pulse {
+  from { opacity: 0.35; }
+  to { opacity: 0.9; }
+}

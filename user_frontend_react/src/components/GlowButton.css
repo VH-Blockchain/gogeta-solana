@@ -1,0 +1,39 @@
+.glow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  font-family: 'Poppins', sans-serif;
+  white-space: nowrap;
+  transition:
+    transform 130ms ease,
+    box-shadow 170ms ease,
+    background 170ms ease;
+}
+
+.glow-btn:disabled {
+  cursor: default;
+}
+
+.glow-btn__icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.glow-btn__icon > svg {
+  font-size: inherit;
+}
+
+/* Flutter's CircularProgressIndicator(strokeWidth: 2.2) in onAccent. */
+.glow-btn__spinner {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2.2px solid rgba(10, 12, 16, 0.25);
+  border-top-color: var(--on-accent);
+  animation: glow-btn-spin 800ms linear infinite;
+}
+
+@keyframes glow-btn-spin {
+  to { transform: rotate(360deg); }
+}

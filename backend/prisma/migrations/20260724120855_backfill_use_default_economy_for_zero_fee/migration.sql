@@ -1,0 +1,13 @@
+-- Backfill: predictions sitting at entryFee = 0 were never a deliberate
+-- "free forever" override -- entryFee/useDefaultEconomy didn't exist as a
+-- concept until this feature shipped, and 0 is simply what every row got
+-- before "Default points" was ever set. Flip those to useDefaultEconomy =
+-- true so they immediately track the live Default points/reward setting
+-- (and show the app's points/reward summary again), exactly like a
+-- freshly-created "use default" prediction.
+--
+-- Predictions with a real non-zero entryFee are left untouched (still
+-- useDefaultEconomy = false) -- that's the "manually set" case: whatever
+-- value is stored there keeps being shown as-is, regardless of what
+-- Default points is set to.
+UPDATE "Prediction" SET "useDefaultEconomy" = true WHERE "entryFee" = 0;

@@ -1,0 +1,97 @@
+/* Typography for admin-authored CMS HTML — matches the surrounding page. */
+.cms-body h1,
+.cms-body h2,
+.cms-body h3,
+.cms-body h4 {
+  font-family: 'Poppins', sans-serif;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin: 28px 0 10px;
+}
+
+.cms-body h1 { font-size: 26px; font-weight: 700; }
+.cms-body h2 { font-size: 21px; font-weight: 700; }
+.cms-body h3 { font-size: 17px; font-weight: 600; }
+.cms-body h4 { font-size: 15px; font-weight: 600; }
+
+.cms-body > *:first-child { margin-top: 0; }
+
+.cms-body p { margin: 0 0 14px; }
+
+.cms-body ul,
+.cms-body ol {
+  margin: 0 0 16px;
+  padding-left: 22px;
+}
+
+.cms-body li { margin-bottom: 8px; }
+
+.cms-body a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-decoration-color: rgba(34, 211, 238, 0.4);
+}
+.cms-body a:hover { text-decoration-color: var(--accent); }
+
+.cms-body strong,
+.cms-body b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.cms-body hr {
+  border: none;
+  height: 1px;
+  background: var(--border);
+  margin: 26px 0;
+}
+
+.cms-body blockquote {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border-left: 3px solid var(--accent);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 0 8px 8px 0;
+}
+
+/* A wide table must scroll inside its own container, never the page body. */
+.cms-body table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 18px;
+}
+
+.cms-body th,
+.cms-body td {
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.cms-body th {
+  color: var(--text-primary);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cms-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
+
+.cms-body pre {
+  overflow-x: auto;
+  padding: 14px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 0 0 16px;
+}
+
+.cms-body code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}

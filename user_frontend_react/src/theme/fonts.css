@@ -1,0 +1,56 @@
+/*
+ * 4-font system for the web portal, bundled locally from the exact same
+ * .ttf files the Flutter app shipped (src/assets/fonts) — never a runtime
+ * CDN fetch, which can silently fall back to a system font for any text
+ * painted before it finishes (the "mixed fonts in different places" bug).
+ *
+ *  - Poppins  — the AMBIENT DEFAULT: titles, card headers, buttons, nav.
+ *  - Inter    — genuine long-form paragraph/description copy.
+ *  - DM Sans  — nav labels + small uppercase labels/badges/table headers.
+ *  - Open Sans— stat numbers (StatTile, CoinAmount, leaderboard scores).
+ *
+ * Poppins ships only 500/600/700 (same as pubspec.yaml) — never request
+ * w400 on it, or the browser synthesises a lighter face. Inter/DM Sans/
+ * Open Sans are variable fonts registered per weight from one file, exactly
+ * as the Flutter pubspec did.
+ */
+
+@font-face {
+  font-family: 'Poppins';
+  src: url('../assets/fonts/Poppins-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('../assets/fonts/Poppins-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-display: block;
+}
+@font-face {
+  font-family: 'Poppins';
+  src: url('../assets/fonts/Poppins-Bold.ttf') format('truetype');
+  font-weight: 700 800;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'OpenSans';
+  src: url('../assets/fonts/OpenSans.ttf') format('truetype-variations');
+  font-weight: 400 800;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'Inter';
+  src: url('../assets/fonts/Inter.ttf') format('truetype-variations');
+  font-weight: 400 700;
+  font-display: block;
+}
+
+@font-face {
+  font-family: 'DMSans';
+  src: url('../assets/fonts/DMSans.ttf') format('truetype-variations');
+  font-weight: 400 700;
+  font-display: block;
+}

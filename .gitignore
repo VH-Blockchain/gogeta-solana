@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment variables / Secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+!.env.sample
+
+# Build output
+dist/
+build/
+.next/
+out/
+.vercel/
+
+# Logs
+*.log
+logs/
+
+# Cache
+.cache/
+.vite/
+.eslintcache
+
+# Testing / Coverage
+coverage/

@@ -1,0 +1,72 @@
+/*
+ * The same WebTokens values as webTokens.ts, exposed as CSS custom
+ * properties so plain CSS rules can use them without importing TS.
+ * Keep the two in sync.
+ */
+:root {
+  /* Surfaces */
+  --bg: #04070e;
+  --surface: #0b1220;
+  --surface-alt: #131c2e;
+  --surface-hover: #1b2740;
+
+  /* Glass */
+  --glass-fill-top: rgba(255, 255, 255, 0.157);
+  --glass-fill-bottom: rgba(255, 255, 255, 0.078);
+  --glass-stroke: rgba(255, 255, 255, 0.086);
+  --glass-stroke-strong: rgba(255, 255, 255, 0.149);
+  --glass-highlight: rgba(255, 255, 255, 0.188);
+  --glass-gradient: linear-gradient(to bottom, var(--glass-fill-top), var(--glass-fill-bottom));
+
+  --border: rgba(255, 255, 255, 0.078);
+  --border-strong: rgba(255, 255, 255, 0.133);
+  --chrome-divider: rgba(255, 255, 255, 0.051);
+  --border-width: 1px;
+  --border-width-strong: 1.4px;
+
+  /* Text */
+  --text-primary: #f4f7fc;
+  --text-secondary: #a9b2c5;
+  --text-muted: #667089;
+
+  /* Accents */
+  --accent: #22d3ee;
+  --accent-deep: #2563eb;
+  --gold: #ffc042;
+  --gold-deep: #f59e0b;
+  --violet: #9b7bff;
+  --blue: #6366f1;
+  --coral: #ff8a65;
+  --danger: #ff5a6e;
+  --on-accent: #04070e;
+
+  --accent-gradient: linear-gradient(135deg, #22d3ee, #2563eb);
+  --brand-gradient: linear-gradient(135deg, #22d3ee, #9b7bff);
+
+  /* Layout */
+  --sidebar-width: 248px;
+  --sidebar-rail-width: 76px;
+  --right-rail-width: 296px;
+  --topbar-height: 70px;
+  --content-max-width: 1280px;
+
+  /* Shape */
+  --radius-card: 22px;
+  --radius-control: 13px;
+
+  /* Depth */
+  --card-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.35), 0 3px 8px -4px rgba(0, 0, 0, 0.22);
+  --card-fill: linear-gradient(to bottom, #101a2b, #0a1120);
+  --card-fill-hover: linear-gradient(to bottom, #152134, #0c1422);
+  --panel-fill: linear-gradient(to bottom, #111b2c, #080e1a);
+
+  /* Light mode (portal chrome reads the theme store; page bodies stay dark,
+     matching the Flutter portal's own scope for light mode) */
+  --light-bg: #f4f6fb;
+  --light-surface: #ffffff;
+  --light-surface-alt: #edeff6;
+  --light-text-primary: #111726;
+  --light-text-secondary: #566077;
+  --light-text-muted: #98a0b3;
+  --light-border: rgba(16, 24, 40, 0.078);
+}
