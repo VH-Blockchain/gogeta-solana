@@ -9,7 +9,7 @@ import {
   WithdrawalsRepository,
   type WithdrawalAvailability,
 } from '@/data/api/withdrawalsRepository';
-import { WebTokens, withAlpha } from '@/theme/webTokens';
+import { WebTokens, panelFillBottom, withAlpha } from '@/theme/webTokens';
 import { GlowButton } from '@/components/GlowButton';
 import { DialogCard, Modal } from '@/components/Modal';
 import { useSolanaWallet, walletErrorMessage } from '@/features/points/useSolanaWallet';
@@ -418,9 +418,28 @@ export function WithdrawDialog({
             )}
 
             {/* ── Actions ──────────────────────────────────────────── */}
+            {/* Pinned to the bottom of the card. This dialog is the tallest in
+                the portal and overflows a laptop viewport at 100% zoom, so the
+                card scrolls — and a primary action that scrolls out of sight is
+                the wrong thing to hide in a flow that moves real money. Sticky
+                rather than a flex footer so the rest of the body keeps its
+                existing single-column flow untouched.
+                The negative margins cancel the card's own padding so the bar
+                spans the full width and sits flush with the bottom edge; the
+                background is opaque rather than the card's gradient, which
+                would not line up when re-declared on a child box. */}
             <div
               style={{
+                position: 'sticky',
+                bottom: -20,
+                zIndex: 1,
                 marginTop: 18,
+                marginLeft: -24,
+                marginRight: -24,
+                marginBottom: -20,
+                padding: '14px 24px 20px',
+                background: panelFillBottom,
+                borderTop: `1px solid ${WebTokens.glassStroke}`,
                 display: 'flex',
                 justifyContent: 'flex-end',
                 alignItems: 'center',

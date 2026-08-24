@@ -78,6 +78,16 @@ export function DialogCard({
         maxHeight: 'calc(100vh - 48px)',
         display: 'flex',
         flexDirection: 'column',
+        // The height cap above is only half the job: without an overflow rule,
+        // a body taller than the cap simply renders past it and `.modal`'s own
+        // `overflow: hidden` clips it at the viewport edge — putting the action
+        // row out of reach with no way to scroll to it. Every dialog that uses
+        // this card is a fixed design that grows on smaller viewports or at
+        // 100% browser zoom, so this has to be here rather than per-dialog.
+        overflowY: 'auto',
+        // Stops a flick past the end of the dialog from scrolling the page
+        // behind it, which would move the content the modal is layered over.
+        overscrollBehavior: 'contain',
         padding,
         background: panelFill,
         border: `1px solid ${WebTokens.glassStroke}`,

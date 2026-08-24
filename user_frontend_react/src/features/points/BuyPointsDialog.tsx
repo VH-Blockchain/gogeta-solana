@@ -103,15 +103,48 @@ export function BuyPointsDialog({
     return Number((raw * BigInt(rate)) / 10n ** BigInt(decimals));
   }, [amount, validation.ok, rate, decimals]);
 
+  /**
+   * True once this attempt's payment has left the wallet — either in flight, or
+   * already signed and awaiting verification.
+   *
+   * `step` is the authority here rather than a separate flag, so the two can
+   * never disagree about whether money has moved. A pre-payment failure
+   * (rejected in the wallet, quote refused) leaves `txSignature` null and is
+   * deliberately NOT counted, so the pre-flight check below is still available
+   * on the retry screen — where the balance really is unchanged.
+   */
+  const paymentSubmitted = step === 'paying' || step === 'verifying' || txSignature != null;
+
+  /**
+   * Pre-flight balance check, meaningful only *before* paying.
+   *
+   * `payUsdc` refetches the wallet balance the moment the transfer confirms, so
+   * a user who paid 30 of their 40 USDC now holds 10 while the amount field
+   * still reads 30. Ungated, that lights up "Insufficient USDC balance" for the
+   * entire verification window — seconds before the success screen — about a
+   * payment that went through exactly as asked. The balance dropping is the
+   * point of the transaction, not a problem with it.
+   */
   const insufficientUsdc =
-    wallet.usdcBalance != null && validation.ok && Number(wallet.usdcBalance) < Number(amount.trim());
+    !paymentSubmitted &&
+    wallet.usdcBalance != null &&
+    validation.ok &&
+    Number(wallet.usdcBalance) < Number(amount.trim());
 
   const buy = useCallback(async () => {
     if (!config || !wallet.address) return;
     setError(null);
     setNote(null);
+    // "Try again" is a fresh attempt, so the previous one's signature must not
+    // carry over — it gates both the pre-flight check above and the
+    // orphan-intent cleanup below.
+    setTxSignature(null);
 
     let purchaseId: string | null = null;
+    // Tracked locally as well as in state: the catch block below runs in this
+    // closure, where `txSignature` would still be whatever the last render saw
+    // rather than what this attempt actually produced.
+    let signature: string | null = null;
     try {
       // 1. Server-side quote, before the wallet is asked for anything.
       const intent = await PointsRepository.createIntent(wallet.address, amount.trim());
@@ -125,6 +158,7 @@ export function BuyPointsDialog({
         amountRaw: intent.usdcAmountRaw,
         tokenDecimals: intent.tokenDecimals,
       });
+      signature = hash;
       setTxSignature(hash);
 
       // 3. The backend verifies against the chain. A freshly-submitted payment
@@ -165,11 +199,11 @@ export function BuyPointsDialog({
       setError(isApiException(e) ? e.message : walletErrorMessage(e));
       setStep('failed');
       // A quote the user never paid should not linger as pending.
-      if (purchaseId && !txSignature) {
+      if (purchaseId && !signature) {
         void PointsRepository.cancel(purchaseId).catch(() => {});
       }
     }
-  }, [config, wallet, amount, refreshBalance, loadHistory, txSignature]);
+  }, [config, wallet, amount, refreshBalance, loadHistory]);
 
   const busy = step === 'paying' || step === 'verifying';
 

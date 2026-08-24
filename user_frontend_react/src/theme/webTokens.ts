@@ -103,6 +103,15 @@ export const cardFill = 'linear-gradient(to bottom, #101A2B, #0A1120)';
 export const cardFillHover = 'linear-gradient(to bottom, #152134, #0C1422)';
 /** Dialog/detail-panel fill. */
 export const panelFill = 'linear-gradient(to bottom, #111B2C, #080E1A)';
+/**
+ * The colour `panelFill` resolves to at its bottom edge.
+ *
+ * A gradient re-declared on a child box restarts from that child's own top, so
+ * it can never line up with the parent's. Anything that has to read as part of
+ * the bottom of a dialog — a sticky action bar — needs this flat colour
+ * instead. Kept beside `panelFill` so the two cannot drift apart.
+ */
+export const panelFillBottom = '#080E1A';
 
 /**
  * Flutter's `Color.withValues(alpha:)` — accepts a #rrggbb hex or an

@@ -15,7 +15,9 @@
     "test:layout": "node tests/func3.mjs",
     "test:auth": "node tests/func4.mjs",
     "test:quiz": "node tests/func5.mjs",
-    "test:points": "node tests/func6.mjs"
+    "test:points": "node tests/func6.mjs",
+    "test:withdrawals": "node tests/func7.mjs",
+    "test:dialogs": "node tests/func8.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
